@@ -16,6 +16,7 @@ import yt_dlp
 
 # ========== НАСТРОЙКИ ==========
 TG_TOKEN = '8681585910:AAEvXnyGeP3UeskKi08OW46MUwbO3GUcG_o'
+BOT_USERNAME = 'tt_saveeee_bot'  # 👈 username твоего бота (без @)
 CHANNEL_ID = '-1001888094511'
 CHANNEL_URL = 'https://t.me/lyubimkatt'
 
@@ -51,21 +52,40 @@ def start(message):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📢 Подписаться на канал", url=CHANNEL_URL))
         markup.add(types.InlineKeyboardButton("✅ Я подписался", callback_data="check_sub"))
-        bot.send_message(message.chat.id, "⚠️ *Доступ закрыт!*", reply_markup=markup, parse_mode='Markdown')
+        bot.send_message(message.chat.id, "⚠️ *Доступ закрыт!*\n\nПодпишись на канал, чтобы скачивать видео.", reply_markup=markup, parse_mode='Markdown')
     else:
-        bot.send_message(message.chat.id, "📥 *TikTok Downloader готов!*", reply_markup=main_menu(), parse_mode='Markdown')
+        bot.send_message(message.chat.id, "📥 *TikTok Downloader готов!*\n\nПросто отправь мне ссылку на TikTok видео.", reply_markup=main_menu(), parse_mode='Markdown')
 
 @bot.message_handler(func=lambda msg: msg.text == "📥 Скачать TikTok")
 def download_button(message):
     if not is_subscribed(message.from_user.id):
         bot.send_message(message.chat.id, "⚠️ Сначала подпишись на канал!")
         return
-    bot.send_message(message.chat.id, "🔗 *Отправь ссылку на TikTok*", parse_mode='Markdown')
+    bot.send_message(message.chat.id, "🔗 *Отправь ссылку на TikTok видео*\n\nПример: https://vm.tiktok.com/...", parse_mode='Markdown')
     bot.register_next_step_handler(message, process_tiktok)
 
 @bot.message_handler(func=lambda msg: msg.text == "❓ Помощь")
 def help_button(message):
-    bot.send_message(message.chat.id, "📥 Отправь ссылку на TikTok, я скачаю видео без водяного знака.", reply_markup=main_menu(), parse_mode='Markdown')
+    help_text = f"""📥 *TikTok Downloader — инструкция*
+
+*Как скачать видео:*
+1. Найди видео в TikTok
+2. Нажми *«Поделиться»* → *«Копировать ссылку»*
+3. Отправь ссылку в этот чат
+4. Бот пришлёт видео *без водяного знака*
+
+*Пример ссылки:*
+https://vm.tiktok.com/...
+
+*Команды:*
+/start — начать
+📥 Скачать TikTok — инструкция
+❓ Помощь — это сообщение
+
+*По вопросам и предложениям:* @avgustc
+
+📥 *Скачано с @{BOT_USERNAME}*"""
+    bot.send_message(message.chat.id, help_text, reply_markup=main_menu(), parse_mode='Markdown')
 
 def process_tiktok(message):
     if not is_subscribed(message.from_user.id):
@@ -73,44 +93,57 @@ def process_tiktok(message):
         return
     
     url = message.text.strip()
+    
     if 'tiktok.com' not in url:
-        bot.send_message(message.chat.id, "❌ Это не ссылка TikTok!")
+        bot.send_message(message.chat.id, "❌ *Это не ссылка TikTok!*\n\nОтправь ссылку вида:\nhttps://vm.tiktok.com/...", parse_mode='Markdown')
         return
     
-    wait = bot.send_message(message.chat.id, "📥 *Скачиваю...*", parse_mode='Markdown')
+    wait = bot.send_message(message.chat.id, "📥 *Скачиваю видео...*", parse_mode='Markdown')
+    
     try:
         filename, title = download_tiktok(url)
         with open(filename, 'rb') as video:
-            bot.send_video(message.chat.id, video, caption=f"🎬 *{title[:100]}*", parse_mode='Markdown')
+            bot.send_video(
+                message.chat.id, 
+                video, 
+                caption=f"🎬 *{title[:100]}*\n\n📥 Скачано с @{BOT_USERNAME}",
+                parse_mode='Markdown'
+            )
         os.remove(filename)
         bot.delete_message(message.chat.id, wait.message_id)
     except Exception as e:
-        bot.edit_message_text(f"❌ Ошибка: {e}", message.chat.id, wait.message_id)
+        bot.edit_message_text(f"❌ *Ошибка:* {e}\n\nПроверь ссылку и попробуй снова.", message.chat.id, wait.message_id, parse_mode='Markdown')
 
-@bot.message_handler(func=lambda msg: 'tiktok.com' in msg.text)
+@bot.message_handler(func=lambda msg: 'tiktok.com' in msg.text or 'vm.tiktok.com' in msg.text)
 def handle_tiktok_url(message):
     if not is_subscribed(message.from_user.id):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📢 Подписаться на канал", url=CHANNEL_URL))
         markup.add(types.InlineKeyboardButton("✅ Я подписался", callback_data="check_sub"))
-        bot.send_message(message.chat.id, "⚠️ *Доступ закрыт!*", reply_markup=markup, parse_mode='Markdown')
+        bot.send_message(message.chat.id, "⚠️ *Доступ закрыт!*\n\nПодпишись на канал, чтобы скачивать видео.", reply_markup=markup, parse_mode='Markdown')
         return
     
-    wait = bot.send_message(message.chat.id, "📥 *Скачиваю...*", parse_mode='Markdown')
+    wait = bot.send_message(message.chat.id, "📥 *Скачиваю видео...*", parse_mode='Markdown')
+    
     try:
         filename, title = download_tiktok(message.text)
         with open(filename, 'rb') as video:
-            bot.send_video(message.chat.id, video, caption=f"🎬 *{title[:100]}*", parse_mode='Markdown')
+            bot.send_video(
+                message.chat.id, 
+                video, 
+                caption=f"🎬 *{title[:100]}*\n\n📥 Скачано с @{BOT_USERNAME}",
+                parse_mode='Markdown'
+            )
         os.remove(filename)
         bot.delete_message(message.chat.id, wait.message_id)
     except Exception as e:
-        bot.edit_message_text(f"❌ Ошибка: {e}", message.chat.id, wait.message_id)
+        bot.edit_message_text(f"❌ *Ошибка:* {e}\n\nПроверь ссылку и попробуй снова.", message.chat.id, wait.message_id, parse_mode='Markdown')
 
 @bot.callback_query_handler(func=lambda call: call.data == "check_sub")
 def check_callback(call):
     if is_subscribed(call.from_user.id):
         bot.answer_callback_query(call.id, "✅ Подписка подтверждена!")
-        bot.edit_message_text("🎉 Спасибо!", call.message.chat.id, call.message.message_id)
+        bot.edit_message_text("🎉 Спасибо! Теперь ты можешь скачивать видео.", call.message.chat.id, call.message.message_id)
         bot.send_message(call.message.chat.id, "📥 *TikTok Downloader готов!*", reply_markup=main_menu(), parse_mode='Markdown')
     else:
         bot.answer_callback_query(call.id, "❌ Вы ещё не подписаны!", show_alert=True)
