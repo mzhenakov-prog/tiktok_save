@@ -82,6 +82,7 @@ def download_tiktok(url):
         'outtmpl': '/tmp/tiktok_%(id)s.%(ext)s',
         'quiet': True,
         'ignoreerrors': True,
+        'extractor_args': {'tiktok': {'impersonate': 'true'}},
     }
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
