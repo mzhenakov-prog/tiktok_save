@@ -8,10 +8,10 @@ import sqlite3
 from datetime import datetime
 
 # ========== НАСТРОЙКИ ==========
-BOT_TOKEN = '8681585910:AAEvXnyGeP3UeskKi08OW46MUwbO3GUcG_o'  # Твой TikTok бот
+BOT_TOKEN = '8681585910:AAEvXnyGeP3UeskKi08OW46MUwbO3GUcG_o'
 ADMIN_ID = 5298604296
 BOT_USERNAME = 'tt_saveeee_bot'
-CHANNEL_ID = '-1001888094511'  # Твой музыкальный канал
+CHANNEL_ID = '-1001888094511'
 CHANNEL_URL = 'https://t.me/lyubimkatt'
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -64,14 +64,6 @@ def delete_ref_link(code):
     c.execute("DELETE FROM ref_links WHERE code = ?", (code,))
     conn.commit()
     conn.close()
-
-def get_user_ref_stats(user_id):
-    conn = sqlite3.connect('tiktok_bot.db')
-    c = conn.cursor()
-    c.execute("SELECT ref_code FROM users WHERE user_id = ?", (user_id,))
-    res = c.fetchone()
-    conn.close()
-    return res[0] if res else None
 
 init_db()
 
@@ -128,31 +120,19 @@ def start(message):
     
     add_user(uid, uname, ref_code)
     
-    # Проверка подписки
     if not is_subscribed(uid):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📢 Подписаться на канал", url=CHANNEL_URL))
         markup.add(types.InlineKeyboardButton("✅ Я подписался", callback_data="check_sub"))
-        bot.send_message(
-            message.chat.id,
-            "⚠️ *Доступ к боту закрыт!*\n\nПодпишись на канал, чтобы скачивать видео без водяного знака.",
-            reply_markup=markup,
-            parse_mode='Markdown'
-        )
+        bot.send_message(message.chat.id, "⚠️ *Доступ закрыт!*\n\nПодпишись на канал.", reply_markup=markup, parse_mode='Markdown')
         return
     
     is_admin = (uid == ADMIN_ID)
-    bot.send_message(
-        message.chat.id,
-        "📥 *TikTok Downloader готов!*\n\nОтправь ссылку на TikTok видео — скачаю без водяного знака.",
-        reply_markup=main_menu(is_admin),
-        parse_mode='Markdown'
-    )
+    bot.send_message(message.chat.id, "📥 *TikTok Downloader готов!*", reply_markup=main_menu(is_admin), parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "📥 Скачать TikTok")
 def download_button(message):
     uid = message.from_user.id
-    
     if not is_subscribed(uid):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📢 Подписаться на канал", url=CHANNEL_URL))
@@ -160,12 +140,11 @@ def download_button(message):
         bot.send_message(message.chat.id, "⚠️ *Доступ закрыт!*", reply_markup=markup, parse_mode='Markdown')
         return
     
-    bot.send_message(message.chat.id, "🔗 *Отправь ссылку на TikTok*\n\nПример: https://vm.tiktok.com/...", parse_mode='Markdown')
+    bot.send_message(message.chat.id, "🔗 *Отправь ссылку на TikTok*", parse_mode='Markdown')
     bot.register_next_step_handler(message, process_tiktok)
 
 def process_tiktok(message):
     uid = message.from_user.id
-    
     if not is_subscribed(uid):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📢 Подписаться на канал", url=CHANNEL_URL))
@@ -174,41 +153,32 @@ def process_tiktok(message):
         return
     
     url = message.text.strip()
-    
-    if 'tiktok.com' not in url and 'vm.tiktok.com' not in url:
-        bot.send_message(message.chat.id, "❌ *Это не ссылка TikTok!*", parse_mode='Markdown')
+    if 'tiktok.com' not in url:
+        bot.send_message(message.chat.id, "❌ Это не ссылка TikTok!", parse_mode='Markdown')
         return
     
-    wait = bot.send_message(message.chat.id, "📥 *Скачиваю видео...*", parse_mode='Markdown')
-    
+    wait = bot.send_message(message.chat.id, "📥 *Скачиваю...*", parse_mode='Markdown')
     try:
         filename, title = download_tiktok(url)
         if not filename:
             raise Exception("Не удалось скачать")
-        
-        with open(filename, 'rb') as video:
-            bot.send_video(
-                message.chat.id,
-                video,
-                caption=f"🎬 *{title[:100]}*\n\n📥 Скачано с @{BOT_USERNAME}"
-            )
+        with open(filename, 'rb') as f:
+            bot.send_video(message.chat.id, f, caption=f"🎬 *{title[:100]}*\n\n📥 Скачано с @{BOT_USERNAME}")
         os.remove(filename)
         bot.delete_message(message.chat.id, wait.message_id)
     except Exception as e:
-        bot.edit_message_text(f"❌ *Ошибка:* {e}", message.chat.id, wait.message_id, parse_mode='Markdown')
+        bot.edit_message_text(f"❌ Ошибка: {e}", message.chat.id, wait.message_id, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "🔗 Рефералка")
 def ref_cmd(message):
     if message.from_user.id != ADMIN_ID:
         bot.send_message(message.chat.id, "❌ Только для создателя.")
         return
-    
     bot.send_message(message.chat.id, "🔗 *Реферальная панель*", reply_markup=ref_menu(), parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: m.text == "❓ Помощь")
 def help_cmd(message):
     uid = message.from_user.id
-    
     if not is_subscribed(uid):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📢 Подписаться на канал", url=CHANNEL_URL))
@@ -217,34 +187,15 @@ def help_cmd(message):
         return
     
     is_admin = (uid == ADMIN_ID)
-    help_text = f"""📥 *TikTok Downloader*
-
-*Как пользоваться:*
-1. Найди видео в TikTok
-2. Нажми «Поделиться» → «Копировать ссылку»
-3. Отправь ссылку в этот чат
-4. Бот пришлёт видео *без водяного знака*
-
-*Пример ссылки:*
-https://vm.tiktok.com/...
-
-*Команды:*
-/start — начать
-📥 Скачать TikTok — инструкция
-❓ Помощь — это сообщение"""
-
+    help_text = "📥 *TikTok Downloader*\n\n📥 Скачать TikTok — отправь ссылку\n❓ Помощь — это сообщение"
     if is_admin:
-        help_text += "\n\n🔗 *Рефералка* — создавай ссылки для рекламы"
-    
+        help_text += "\n\n🔗 *Рефералка* — создавай ссылки"
     help_text += "\n\n@avgustc"
-    
     bot.send_message(message.chat.id, help_text, reply_markup=main_menu(is_admin), parse_mode='Markdown')
 
-# ========== ОБРАБОТКА ПРЯМЫХ ССЫЛОК ==========
-@bot.message_handler(func=lambda m: 'tiktok.com' in m.text or 'vm.tiktok.com' in m.text)
+@bot.message_handler(func=lambda m: 'tiktok.com' in m.text)
 def handle_tiktok_url(message):
     uid = message.from_user.id
-    
     if not is_subscribed(uid):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📢 Подписаться на канал", url=CHANNEL_URL))
@@ -252,42 +203,26 @@ def handle_tiktok_url(message):
         bot.send_message(message.chat.id, "⚠️ *Доступ закрыт!*", reply_markup=markup, parse_mode='Markdown')
         return
     
-    wait = bot.send_message(message.chat.id, "📥 *Скачиваю видео...*", parse_mode='Markdown')
-    
+    wait = bot.send_message(message.chat.id, "📥 *Скачиваю...*", parse_mode='Markdown')
     try:
         filename, title = download_tiktok(message.text)
         if not filename:
             raise Exception("Не удалось скачать")
-        
-        with open(filename, 'rb') as video:
-            bot.send_video(
-                message.chat.id,
-                video,
-                caption=f"🎬 *{title[:100]}*\n\n📥 Скачано с @{BOT_USERNAME}"
-            )
+        with open(filename, 'rb') as f:
+            bot.send_video(message.chat.id, f, caption=f"🎬 *{title[:100]}*\n\n📥 Скачано с @{BOT_USERNAME}")
         os.remove(filename)
         bot.delete_message(message.chat.id, wait.message_id)
     except Exception as e:
-        bot.edit_message_text(f"❌ *Ошибка:* {e}", message.chat.id, wait.message_id, parse_mode='Markdown')
+        bot.edit_message_text(f"❌ Ошибка: {e}", message.chat.id, wait.message_id, parse_mode='Markdown')
 
-# ========== ПРОВЕРКА ПОДПИСКИ ==========
 @bot.callback_query_handler(func=lambda call: call.data == "check_sub")
 def check_callback(call):
     if is_subscribed(call.from_user.id):
         bot.answer_callback_query(call.id, "✅ Подписка подтверждена!")
-        bot.edit_message_text(
-            "🎉 Спасибо за подписку! Теперь ты можешь скачивать видео.",
-            call.message.chat.id,
-            call.message.message_id
-        )
+        bot.edit_message_text("🎉 Спасибо!", call.message.chat.id, call.message.message_id)
         uid = call.from_user.id
         is_admin = (uid == ADMIN_ID)
-        bot.send_message(
-            call.message.chat.id,
-            "📥 *TikTok Downloader готов!*\n\nОтправь ссылку на TikTok видео.",
-            reply_markup=main_menu(is_admin),
-            parse_mode='Markdown'
-        )
+        bot.send_message(call.message.chat.id, "📥 *TikTok Downloader готов!*", reply_markup=main_menu(is_admin), parse_mode='Markdown')
     else:
         bot.answer_callback_query(call.id, "❌ Вы ещё не подписаны!", show_alert=True)
 
@@ -296,7 +231,7 @@ def check_callback(call):
 def create_ref(call):
     if call.from_user.id != ADMIN_ID:
         return
-    msg = bot.send_message(call.message.chat.id, "📝 *Введи название для ссылки*\n\nНапример: `канал_петрова`", parse_mode='Markdown')
+    msg = bot.send_message(call.message.chat.id, "📝 *Введи название для ссылки*", parse_mode='Markdown')
     bot.register_next_step_handler(msg, save_ref)
 
 def save_ref(message):
@@ -304,36 +239,32 @@ def save_ref(message):
     code = f"ref_{int(time.time())}"
     add_ref_link(code, label)
     ref_link = f"https://t.me/{BOT_USERNAME}?start={code}"
-    bot.send_message(message.chat.id, f"✅ *Ссылка создана!*\n\n🔗 `{ref_link}`\n📌 Метка: {label}", parse_mode='Markdown')
+    bot.send_message(message.chat.id, f"✅ *Ссылка создана!*\n\n🔗 `{ref_link}`\n📌 {label}", parse_mode='Markdown')
 
 @bot.callback_query_handler(func=lambda call: call.data == "ref_list")
 def list_refs(call):
     if call.from_user.id != ADMIN_ID:
         return
-    
     links = get_ref_links()
     if not links:
-        bot.send_message(call.message.chat.id, "📭 *Нет созданных ссылок*", parse_mode='Markdown')
+        bot.send_message(call.message.chat.id, "📭 *Нет ссылок*", parse_mode='Markdown')
         return
-    
     markup = types.InlineKeyboardMarkup(row_width=1)
     for code, label, clicks, created in links:
-        markup.add(types.InlineKeyboardButton(f"📊 {label} — {clicks} переходов", callback_data=f"ref_{code}"))
+        markup.add(types.InlineKeyboardButton(f"📊 {label} — {clicks}", callback_data=f"ref_{code}"))
     markup.add(types.InlineKeyboardButton("🔙 Назад", callback_data="back_to_ref"))
-    
-    bot.send_message(call.message.chat.id, "📊 *Список реферальных ссылок:*", reply_markup=markup, parse_mode='Markdown')
+    bot.send_message(call.message.chat.id, "📊 *Список ссылок:*", reply_markup=markup, parse_mode='Markdown')
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('ref_') and call.data != "ref_create" and call.data != "ref_list")
+@bot.callback_query_handler(func=lambda call: call.data.startswith('ref_') and call.data not in ["ref_create", "ref_list"])
 def show_ref_stats(call):
     if call.from_user.id != ADMIN_ID:
         return
-    
     code = call.data[4:]
     links = get_ref_links()
     for c, label, clicks, created in links:
         if c == code:
             ref_link = f"https://t.me/{BOT_USERNAME}?start={code}"
-            text = f"📊 *Статистика ссылки*\n\n📌 Метка: {label}\n🔗 `{ref_link}`\n👥 Переходов: {clicks}\n📅 Создана: {created}"
+            text = f"📊 *Статистика*\n\n📌 {label}\n🔗 `{ref_link}`\n👥 {clicks}\n📅 {created}"
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton("🗑 Удалить", callback_data=f"del_{code}"))
             markup.add(types.InlineKeyboardButton("🔙 Назад", callback_data="ref_list"))
@@ -345,11 +276,10 @@ def show_ref_stats(call):
 def delete_ref(call):
     if call.from_user.id != ADMIN_ID:
         return
-    
     code = call.data[4:]
     delete_ref_link(code)
-    bot.answer_callback_query(call.id, "✅ Ссылка удалена!")
-    bot.edit_message_text("🗑 Ссылка удалена", call.message.chat.id, call.message.message_id)
+    bot.answer_callback_query(call.id, "✅ Удалено!")
+    bot.edit_message_text("🗑 Удалено", call.message.chat.id, call.message.message_id)
 
 @bot.callback_query_handler(func=lambda call: call.data == "back_to_ref")
 def back_to_ref(call):
@@ -359,5 +289,5 @@ def back_to_ref(call):
     ref_cmd(call.message)
 
 if __name__ == '__main__':
-    print("📥 TikTok Downloader Bot запущен!")
+    print("📥 TikTok Bot запущен!")
     bot.infinity_polling()
