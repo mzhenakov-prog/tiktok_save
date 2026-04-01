@@ -20,25 +20,15 @@ bot = telebot.TeleBot(BOT_TOKEN)
 def init_db():
     conn = sqlite3.connect('tiktok_bot.db')
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (user_id INTEGER PRIMARY KEY,
-                  username TEXT,
-                  first_seen TEXT,
-                  ref_code TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS ref_links
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  code TEXT UNIQUE,
-                  label TEXT,
-                  clicks INTEGER DEFAULT 0,
-                  created_at TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, username TEXT, first_seen TEXT, ref_code TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS ref_links (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE, label TEXT, clicks INTEGER DEFAULT 0, created_at TEXT)''')
     conn.commit()
     conn.close()
 
 def add_user(user_id, username, ref_code=None):
     conn = sqlite3.connect('tiktok_bot.db')
     c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO users (user_id, username, first_seen, ref_code) VALUES (?, ?, ?, ?)",
-              (user_id, username, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ref_code))
+    c.execute("INSERT OR IGNORE INTO users (user_id, username, first_seen, ref_code) VALUES (?, ?, ?, ?)", (user_id, username, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ref_code))
     if ref_code:
         c.execute("UPDATE ref_links SET clicks = clicks + 1 WHERE code = ?", (ref_code,))
     conn.commit()
@@ -47,8 +37,7 @@ def add_user(user_id, username, ref_code=None):
 def add_ref_link(code, label):
     conn = sqlite3.connect('tiktok_bot.db')
     c = conn.cursor()
-    c.execute("INSERT INTO ref_links (code, label, created_at) VALUES (?, ?, ?)",
-              (code, label, datetime.now().strftime("%Y-%m-%d")))
+    c.execute("INSERT INTO ref_links (code, label, created_at) VALUES (?, ?, ?)", (code, label, datetime.now().strftime("%Y-%m-%d")))
     conn.commit()
     conn.close()
 
@@ -82,15 +71,13 @@ def download_tiktok(url):
         'outtmpl': '/tmp/tiktok_%(id)s.%(ext)s',
         'quiet': True,
         'ignoreerrors': True,
-        'extractor_args': {'tiktok': {'impersonate': 'true'}},
     }
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
             return filename, info.get('title', 'TikTok')
-    except Exception as e:
-        print(f"Ошибка: {e}")
+    except:
         return None, None
 
 # ========== КНОПКИ ==========
@@ -125,7 +112,7 @@ def start(message):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📢 Подписаться на канал", url=CHANNEL_URL))
         markup.add(types.InlineKeyboardButton("✅ Я подписался", callback_data="check_sub"))
-        bot.send_message(message.chat.id, "⚠️ *Доступ закрыт!*\n\nПодпишись на канал.", reply_markup=markup, parse_mode='Markdown')
+        bot.send_message(message.chat.id, "⚠️ *Доступ закрыт!*", reply_markup=markup, parse_mode='Markdown')
         return
     
     is_admin = (uid == ADMIN_ID)
@@ -141,7 +128,7 @@ def download_button(message):
         bot.send_message(message.chat.id, "⚠️ *Доступ закрыт!*", reply_markup=markup, parse_mode='Markdown')
         return
     
-    bot.send_message(message.chat.id, "🔗 *Отправь ссылку на TikTok*", parse_mode='Markdown')
+    bot.send_message(message.chat.id, "🔗 *Отправь ссылку*", parse_mode='Markdown')
     bot.register_next_step_handler(message, process_tiktok)
 
 def process_tiktok(message):
@@ -155,14 +142,14 @@ def process_tiktok(message):
     
     url = message.text.strip()
     if 'tiktok.com' not in url:
-        bot.send_message(message.chat.id, "❌ Это не ссылка TikTok!", parse_mode='Markdown')
+        bot.send_message(message.chat.id, "❌ Не ссылка", parse_mode='Markdown')
         return
     
     wait = bot.send_message(message.chat.id, "📥 *Скачиваю...*", parse_mode='Markdown')
     try:
         filename, title = download_tiktok(url)
         if not filename:
-            raise Exception("Не удалось скачать")
+            raise Exception("Ошибка")
         with open(filename, 'rb') as f:
             bot.send_video(message.chat.id, f, caption=f"🎬 *{title[:100]}*\n\n📥 Скачано с @{BOT_USERNAME}")
         os.remove(filename)
@@ -188,11 +175,10 @@ def help_cmd(message):
         return
     
     is_admin = (uid == ADMIN_ID)
-    help_text = "📥 *TikTok Downloader*\n\n📥 Скачать TikTok — отправь ссылку\n❓ Помощь — это сообщение"
+    text = "📥 *TikTok Downloader*\n\n📥 Скачать TikTok\n❓ Помощь"
     if is_admin:
-        help_text += "\n\n🔗 *Рефералка* — создавай ссылки"
-    help_text += "\n\n@avgustc"
-    bot.send_message(message.chat.id, help_text, reply_markup=main_menu(is_admin), parse_mode='Markdown')
+        text += "\n\n🔗 Рефералка"
+    bot.send_message(message.chat.id, text, reply_markup=main_menu(is_admin), parse_mode='Markdown')
 
 @bot.message_handler(func=lambda m: 'tiktok.com' in m.text)
 def handle_tiktok_url(message):
@@ -208,7 +194,7 @@ def handle_tiktok_url(message):
     try:
         filename, title = download_tiktok(message.text)
         if not filename:
-            raise Exception("Не удалось скачать")
+            raise Exception("Ошибка")
         with open(filename, 'rb') as f:
             bot.send_video(message.chat.id, f, caption=f"🎬 *{title[:100]}*\n\n📥 Скачано с @{BOT_USERNAME}")
         os.remove(filename)
@@ -222,17 +208,15 @@ def check_callback(call):
         bot.answer_callback_query(call.id, "✅ Подписка подтверждена!")
         bot.edit_message_text("🎉 Спасибо!", call.message.chat.id, call.message.message_id)
         uid = call.from_user.id
-        is_admin = (uid == ADMIN_ID)
-        bot.send_message(call.message.chat.id, "📥 *TikTok Downloader готов!*", reply_markup=main_menu(is_admin), parse_mode='Markdown')
+        bot.send_message(call.message.chat.id, "📥 *TikTok Downloader готов!*", reply_markup=main_menu(uid == ADMIN_ID), parse_mode='Markdown')
     else:
-        bot.answer_callback_query(call.id, "❌ Вы ещё не подписаны!", show_alert=True)
+        bot.answer_callback_query(call.id, "❌ Не подписаны!", show_alert=True)
 
-# ========== РЕФЕРАЛЬНЫЕ КНОПКИ ==========
 @bot.callback_query_handler(func=lambda call: call.data == "ref_create")
 def create_ref(call):
     if call.from_user.id != ADMIN_ID:
         return
-    msg = bot.send_message(call.message.chat.id, "📝 *Введи название для ссылки*", parse_mode='Markdown')
+    msg = bot.send_message(call.message.chat.id, "📝 *Введи название*", parse_mode='Markdown')
     bot.register_next_step_handler(msg, save_ref)
 
 def save_ref(message):
@@ -240,7 +224,7 @@ def save_ref(message):
     code = f"ref_{int(time.time())}"
     add_ref_link(code, label)
     ref_link = f"https://t.me/{BOT_USERNAME}?start={code}"
-    bot.send_message(message.chat.id, f"✅ *Ссылка создана!*\n\n🔗 `{ref_link}`\n📌 {label}", parse_mode='Markdown')
+    bot.send_message(message.chat.id, f"✅ Ссылка: `{ref_link}`\n📌 {label}", parse_mode='Markdown')
 
 @bot.callback_query_handler(func=lambda call: call.data == "ref_list")
 def list_refs(call):
@@ -265,7 +249,7 @@ def show_ref_stats(call):
     for c, label, clicks, created in links:
         if c == code:
             ref_link = f"https://t.me/{BOT_USERNAME}?start={code}"
-            text = f"📊 *Статистика*\n\n📌 {label}\n🔗 `{ref_link}`\n👥 {clicks}\n📅 {created}"
+            text = f"📊 *Статистика*\n\n📌 {label}\n🔗 `{ref_link}`\n👥 {clicks}"
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton("🗑 Удалить", callback_data=f"del_{code}"))
             markup.add(types.InlineKeyboardButton("🔙 Назад", callback_data="ref_list"))
